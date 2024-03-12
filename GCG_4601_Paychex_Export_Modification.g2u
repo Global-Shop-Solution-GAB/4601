@@ -1,0 +1,148 @@
+Program.Sub.Preflight.Start
+
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'this run from Shop Floor Control > transactions > transfer labor to payroll
+Function.Intrinsic.Control.If(V.Caller.Hook,<>,15290)
+	Function.Intrinsic.Control.End
+
+Function.Intrinsic.Control.EndIf
+F.Intrinsic.Control.CallSub(Process)
+Program.Sub.Main.End
+
+Program.Sub.Process.Start
+F.Intrinsic.Control.SetErrorHandler("Process_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+
+Variable.local.export.declare(String)
+Variable.local.export.redim(0,6)
+Variable.local.hold.declare(String)
+Variable.local.query.declare(String)
+Variable.Local.I.declare(Long)
+Variable.local.DIR.declare(String)
+Variable.local.date.declare(String)
+Variable.local.file.declare(Long)
+Variable.local.filename.declare(String)
+Variable.local.sResult.declare(String)
+Variable.Local.time.Declare(String)
+Variable.Local.id.Declare(String)
+V.Local.shold.Declare(String)
+V.Local.sSQL.Declare(String)
+V.Local.sPaytype.Declare(String)
+V.Local.sEmployee.Declare(String)
+V.Local.sHours.Declare(String)
+V.Local.sType.Declare(String)
+V.Local.sEC.Declare(String)
+
+V.Local.shold.Set("12072184")
+
+Function.Odbc.Connection!Conx.Openconnection(Variable.Ambient.pDSN,Variable.Ambient.PUser,Variable.Ambient.PPass)
+
+Function.Intrinsic.String.Left(Variable.Passed.888888,8,Variable.Local.date)
+Function.Intrinsic.String.Mid(Variable.Passed.888888,9,6,Variable.Local.time)
+Function.Intrinsic.String.Mid(Variable.Passed.888888,15,2,Variable.Local.id)
+Function.Intrinsic.string.Left(V.Local.shold,8,Variable.Local.hold)
+
+Function.Intrinsic.Control.If(Variable.Local.hold.Length,<,3)
+	Function.intrinsic.string.concat(Variable.Local.hold,"_",Variable.Local.hold)
+Function.Intrinsic.Control.EndIf
+Function.Intrinsic.File.Gethandle(Variable.Local.File)
+'PGF changed the file type from txt to xls
+Function.Intrinsic.String.Concat(Variable.Caller.FilesDir,"\E",Variable.Local.hold,"TA.xls",Variable.Local.Filename)
+Function.Intrinsic.File.Openforwrite(Variable.Local.Filename,Variable.Local.File)
+
+'PGF changed the header structure to include all the column headers required
+Function.Intrinsic.File.Writeline(Variable.Local.File,"2")
+Function.Intrinsic.File.Writeline(Variable.Local.File,"Client ID	Worker ID	Org	Job Number	Pay Component	Rate	Rate Number	Hours	Units	Line date	Amount	Check seq number	Override state	Override local	Override local jurisdiction	Labor Override	Check Template	Output Type	Net Pay	Check Number	FIT Amt	SS Amt	Medicare Amt	Fed Backup Withholding Amt	State Tax Jurisdiction	SIT Amount	SDI Amt	SUI Amt	State Misc Amt	State Surcharge Amt	State WC Amt	State Backup Withholding Amt	State Allocation %	Local Tax Jurisdiction	Local Tax Name	Local Amt	Local Allocation %")
+Function.intrinsic.string.concat("SELECT EMPLOYEE,DESCR,HOURS,TYPE from PYRL_LABOR_XFER WHERE RUN_CYMD = '",Variable.Local.date,"' AND RUN_TIME = '",Variable.Local.time,"'",Variable.Local.query)
+'Function.intrinsic.string.build("SELECT EMPLOYEE,DESCR,HOURS,TYPE from PYRL_LABOR_XFER where RUN_CYMD = '{0}'","20170630",Variable.Local.query)
+Function.Odbc.Connection!Conx.Openrecordsetro("rstX",Variable.Local.query)
+Function.Intrinsic.Control.dountil(Variable.Odbc.Conx!Rstx.Eof,=,True)
+	v.Local.sEC.Set(Variable.Odbc.Conx!Rstx.Fieldval!DESCR)
+	
+	'PGF changed the dimension of the variable to allocate the values to fit the new column header disposition
+	Variable.local.export.redim(0,7)
+		Function.Intrinsic.string.Left(V.Local.shold,8,Variable.Local.hold)
+	Variable.local.export(1).set(Variable.Odbc.Conx!Rstx.Fieldval!EMPLOYEE)
+	V.Local.export(0).Set(V.Local.shold)
+
+	'PGF inserted the conversion for two earnings code
+		F.Intrinsic.Control.If(V.Local.sEC,=,"PERSONAL HOLIDAY")
+			V.Local.sEC.Set("Personal Holiday")
+		F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.If(V.Local.sEC,=,"Union Per Holiday   ")
+			V.Local.sEC.Set("Personal Holiday")
+		F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.If(V.Local.sEC,=,"Non Union Per Holiday   ")
+			V.Local.sEC.Set("Personal Holiday")
+		F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.If(V.Local.sEC,=,"BEREAVEMENT         ")
+			V.Local.sEC.Set("Bereavement")
+		F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.If(V.Local.sEC,=,"HOLIDAY             ")
+			V.Local.sEC.Set("Holiday")
+		F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.If(V.Local.sEC,=,"VACATION            ")
+			V.Local.sEC.Set("Vacation")
+		F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.If(V.Local.sEC,=," 2-Overtime         ")
+			V.Local.sEC.Set("Overtime")
+		F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.If(V.Local.sEC,=," 3-Double Time      ")
+			V.Local.sEC.Set("Double Time")
+		F.Intrinsic.Control.EndIf
+		
+		F.Intrinsic.Control.If(V.Local.sEC,=," 1-Regular          ")
+			F.Intrinsic.String.Build("select pay_type from employee_mstr where employee = '{0}'",Variable.Odbc.Conx!Rstx.Fieldval!EMPLOYEE,V.Local.sSQL)
+			F.ODBC.Connection!Conx.ExecuteAndReturn(V.Local.sSQL,V.Local.sPaytype)
+				F.Intrinsic.Control.If(V.Local.sPaytype,=,"H")
+					v.Local.sEC.Set("Hourly")
+				F.Intrinsic.Control.EndIf
+				F.Intrinsic.Control.If(V.Local.sPaytype,=,"S")			
+					v.Local.sEC.Set("Salary")
+				F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+		
+	Variable.local.export(4).set(V.Local.sEC)
+	v.Local.sEC.Set("")
+		V.Local.sHours.Set(Variable.Odbc.Conx!Rstx.Fieldval!HOURS)
+			F.Intrinsic.String.Trim(V.Local.sHours,V.Local.sHours)
+	Variable.local.export(7).set(Variable.Local.sHours)
+	Variable.local.hold.set("")
+	Function.Intrinsic.Control.For(Variable.Local.I,Variable.Local.export.Lbound,Variable.Local.export.Ubound,1)
+		Function.intrinsic.control.if(Variable.Local.I,=,0)
+			Variable.Local.hold.Set(Variable.Local.export(0))
+		Function.intrinsic.control.elseif(Variable.Local.i,<>,0)
+			Function.intrinsic.string.concat(Variable.Local.hold,"	",Variable.Local.export(Variable.Local.I),Variable.Local.hold)
+		Function.intrinsic.control.endif
+	Function.intrinsic.control.next(Variable.Local.I)
+	Function.Intrinsic.File.Writeline(Variable.Local.File,Variable.Local.Hold)
+	Function.Odbc.Conx!Rstx.movenext
+Function.intrinsic.control.loop
+Function.Odbc.Conx!Rstx.Close
+Function.Intrinsic.File.Closefile(Variable.Local.File)
+F.Intrinsic.Task.ShellExec(V.Local.file, "open", V.Local.filename, "", "", 1)
+Function.Odbc.Connection!Conx.Close
+Function.Intrinsic.Control.End
+
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("Process_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4601_Paychex_Export_Modification.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	Function.Intrinsic.Control.CallSub(unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.Process.End
+
+Program.Sub.Unload.Start
+Function.Intrinsic.Control.End
+
+Program.Sub.Unload.End
+
+Program.Sub.Comments.Start
+${$0$}$$}$DH1$}$7/10/2017 3:34:29 PM$}$True
+${$3$}$0$}$$}$0$}$-1$}$$}$12:00:00 AM$}$This will be a modification to the currently used Paychex project
+
+Program.Sub.Comments.End
